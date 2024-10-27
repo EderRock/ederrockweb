@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tradutor de Scripts</title>
+    <style>
+        :root {
+            --window-width: 300px;
+            --window-height: 170px;
+            --gap-size: 10px;
+            --button-font-size: 14px;
+            --checkbox-font-size: 12px;
+            --border-radius: 10px;
+            --padding: 10px;
+            --font-size: 14px;
+            --bg-color: #f4f4f9;
+            --box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: var(--box-shadow);
+            padding: 15px;
+            max-width: 1200px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: var(--gap-size);
+            height: 100%;
+            box-sizing: border-box;
+        }
+        .row {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: var(--gap-size);
+            flex: 1;
+        }
+        .window {
+            flex: 1;
+            min-width: var(--window-width);
+            display: flex;
+            flex-direction: column;
+            margin-right: 5px;
+        }
+        .window h3 {
+            margin-top: 0;
+        }
+        textarea, pre {
+            width: 100%;
+            height: var(--window-height);
+            border: 1px solid #ccc;
+            border-radius: var(--border-radius);
+            padding: var(--padding);
+            font-size: var(--font-size);
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: var(--border-radius);
+            padding: var(--padding) 20px;
+            cursor: pointer;
+            font-size: var(--button-font-size);
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="statusMessage" style="margin-bottom: 10px; color: red;"></div>
+        <div class="row">
+            <div class="window">
+                <h3>Script Original</h3>
+                <textarea id="inputScript" rows="10" aria-label="Script Original"></textarea>
+                <button onclick="extractMonsterNames()" aria-label="Extrair Nomes dos Monstros">Extrair Nomes dos Monstros</button>
+            </div>
+            <div class="window">
+                <h3>Texto Extraído</h3>
+                <textarea id="extractedStrings" rows="10" aria-label="Texto Extraído"></textarea>
+                <button onclick="copyExtractedText()" aria-label="Copiar Texto Extraído">Copiar Texto Extraído</button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="window">
+                <h3>Texto Traduzido</h3>
+                <textarea id="translatedStrings" rows="10" aria-label="Texto Traduzido"></textarea>
+                <button onclick="pasteStrings()" aria-label="Colar Texto Traduzido">Colar Texto Traduzido</button>
+                <button onclick="generateTranslatedScript()" aria-label="Gerar Script Traduzido">Gerar Script Traduzido</button>
+            </div>
+            <div class="window">
+                <h3>Script Traduzido</h3>
+                <pre id="translatedScript"></pre>
+                <button onclick="copyTranslatedScript()" aria-label="Copiar Script Traduzido">Copiar Script Traduzido</button>
+            </div>
+        </div>
+        <!-- Adicionando os Checkboxes -->
+        <div class="row">
+            <div>
+                <input type="checkbox" id="copyNameOnly" checked>
+                <label for="copyNameOnly">Copiar apenas os nomes</label>
+            </div>
+            <div>
+                <input type="checkbox" id="copyIdOnly">
+                <label for="copyIdOnly">Copiar apenas os IDs</label>
+            </div>
+        </div>
+    </div>
+    <script>
+        async function extractMonsterNames() {
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = 'Extraindo nomes dos monstros e traduzindo...';
+            try {
+                const inputScript = document.getElementById('inputScript').value;
+                const extractedStrings = document.getElementById('extractedStrings');
+                const translatedStrings = document.getElementById('translatedStrings');
+                const uniqueNames = new Set();
+                const regex = /\bmonster\s+(\w+(?:\s+\w+)*)\s+(\d+),/g;
+                let extractedText = '';
+                let translatedText = '';
+                let match;
+
+                while ((match = regex.exec(inputScript)) !== null) {
+                    const monsterName = match[1].trim();
+                    const mobId = match[2].trim();
+                    if (!uniqueNames.has(monsterName)) {
+                        uniqueNames.add(monsterName);
+                        extractedText += `${monsterName}\t\t${mobId}\n`;
+                        const translatedName = await buscarNomeMobOnline(mobId.trim()) || monsterName;
+                        translatedText += `${translatedName}\n`;
+
+                        // Atualizar a porcentagem de conclusão
+                        const percentComplete = Math.round(((uniqueNames.size) / (regex.exec(inputScript) || []).length) * 100);
+                        statusMessage.textContent = `Extraindo e traduzindo... ${percentComplete}% concluído`;
+                    }
+                }
+                extractedStrings.value = extractedText.trim();
+                translatedStrings.value = translatedText.trim();
+                statusMessage.textContent = 'Extração e tradução concluídas!';
+            } catch (error) {
+                console.error('Erro ao extrair e traduzir os nomes dos monstros:', error);
+                statusMessage.textContent = 'Erro ao extrair e traduzir os nomes. Verifique o console para mais detalhes.';
+            }
+        }
+		async function buscarNomeMobOnline(mobId) {
+			return fetch(`http://localhost:3001/mob/${mobId}`)
+				.then(response => response.json())
+				.then(data => data.nome || null)
+				.catch(error => {
+					console.error('Erro ao buscar nome do mob:', error);
+					return null;
+				});
+		}
+
+        async function generateTranslatedScript() {
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = 'Gerando script traduzido...';
+            try {
+                const originalScript = document.getElementById('inputScript').value;
+                const translatedStringsElement = document.getElementById('translatedStrings');
+                const translatedStrings = translatedStringsElement.value.split('\n');
+                const extractedStrings = document.getElementById('extractedStrings').value.split('\n');
+                let translatedScript = originalScript;
+
+                for (let index = 0; index < extractedStrings.length; index++) {
+                    const line = extractedStrings[index];
+                    const [originalName, mobId] = line.split('\t\t');
+                    const translatedName = translatedStrings[index] ? translatedStrings[index].trim() : await buscarNomeMobOnline(mobId.trim()) || originalName.trim();
+                    
+                    if (!translatedStrings[index]) {
+                        translatedStrings[index] = translatedName;
+                    }
+                    
+                    translatedScript = translatedScript.replace(new RegExp(`\\b${originalName.trim()}\\b`, 'g'), translatedName);
+                    
+                    // Atualizar a porcentagem de conclusão
+                    const percentComplete = Math.round(((index + 1) / extractedStrings.length) * 100);
+                    statusMessage.textContent = `Gerando script traduzido... ${percentComplete}% concluído`;
+                }
+
+                translatedStringsElement.value = translatedStrings.join('\n');
+                document.getElementById('translatedScript').textContent = translatedScript;
+                statusMessage.textContent = 'Script traduzido gerado!';
+            } catch (error) {
+                console.error('Erro ao gerar o script traduzido:', error);
+                statusMessage.textContent = 'Erro ao gerar o script traduzido. Verifique o console para mais detalhes.';
+            }
+        }
+        function copyExtractedText() {
+            const copyNameOnly = document.getElementById('copyNameOnly').checked;
+            const copyIdOnly = document.getElementById('copyIdOnly').checked;
+            const extractedText = document.getElementById('extractedStrings').value;
+            const lines = extractedText.split('\n');
+            let textToCopy;
+
+            if (copyNameOnly) {
+                textToCopy = lines.map(line => line.split('\t\t')[0]).join('\n');
+            } else if (copyIdOnly) {
+                textToCopy = lines.map(line => line.split('\t\t')[1]).join('\n');
+            }
+
+            navigator.clipboard.writeText(textToCopy)
+                .then(() => alert('Texto copiado para a área de transferência!'))
+                .catch(error => console.error('Erro ao copiar o texto:', error));
+        }
+
+        function pasteStrings() {
+            navigator.clipboard.readText()
+                .then(text => document.getElementById('translatedStrings').value = text)
+                .catch(error => console.error('Erro ao colar strings:', error));
+        }
+        function copyTranslatedScript() {
+            navigator.clipboard.writeText(document.getElementById('translatedScript').textContent)
+                .then(() => alert('Script traduzido copiado para a área de transferência!'))
+                .catch(error => console.error('Erro ao copiar o script traduzido:', error));
+        }
+    </script>
+</body>
+</html>
